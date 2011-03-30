@@ -1,0 +1,2 @@
+#!/usr/bin/env ruby -wKU
+load File.dirname(__FILE__) + '/bin/cheap_tourist_fast_tourist'
