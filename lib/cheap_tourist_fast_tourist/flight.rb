@@ -24,8 +24,8 @@ class Flight
   private
   #######
 
-  # in seconds, not that it matters
+  # in minutes, not that it matters
   def calculate_flight_time
-    ( Time.parse(departure) - Time.parse(arrival) ).abs
+    ( (Time.parse(departure) - Time.parse(arrival)) / 60.0 ).abs
   end
 end

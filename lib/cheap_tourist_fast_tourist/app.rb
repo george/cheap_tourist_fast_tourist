@@ -34,14 +34,18 @@ module CheapTouristFastTourist
     #######
 
     def cheapest_flight(group)
+raise group.inspect
       lowest_priced_flight = group.min { |a, b| total_price_of_flight(a) <=> total_price_of_flight(b) }
+raise lowest_priced_flight.inspect
       lowest_price = total_price_of_flight(lowest_priced_flight)
       flights_at_lowest_price = group.find_all{ |legs| total_price_of_flight(legs) == lowest_price }
+raise flights_at_lowest_price.inspect
       if flights_at_lowest_price.size == 1
         flights_at_lowest_price.first
       else
         fastest_flight(flights_at_lowest_price)
       end
+      # flights_at_lowest_price.min { |a, b| total_elasped_time_for_flight(a) <=> total_elasped_time_for_flight(b) }
     end
     
     def display_usage_and_exit(error_message = nil)
@@ -51,14 +55,17 @@ module CheapTouristFastTourist
     end
 
     def fastest_flight(group)
-      shortest_flight = group.min { |a, b| total_time_of_flight(a) <=> total_time_of_flight(b) }
-      shortest_flight_time = total_time_of_flight(shortest_flight)
-      flights_at_shortest_time = group.find_all{ |legs| total_time_of_flight(legs) == shortest_flight_time }
-      if flights_at_shortest_time.size == 1
-        flights_at_shortest_time.first
-      else
-        cheapest_flight(flights_at_shortest_time)
-      end
+      shortest_flight = group.min { |a, b| total_elasped_time_for_flight(a) <=> total_elasped_time_for_flight(b) }
+      shortest_flight_time = total_elasped_time_for_flight(shortest_flight)
+# raise (shortest_flight_time).inspect
+      flights_at_shortest_time = group.find_all{ |legs| total_elasped_time_for_flight(legs) == shortest_flight_time }
+# raise flights_at_shortest_time.inspect
+      # if flights_at_shortest_time.size == 1
+      #         flights_at_shortest_time.first
+      #       else
+      #         cheapest_flight(flights_at_shortest_time)
+      #       end
+      flights_at_shortest_time.min { |a, b| total_price_of_flight(a) <=> total_price_of_flight(b) }
     end
 
     def file_exists?(filepath)
@@ -66,17 +73,30 @@ module CheapTouristFastTourist
     end
 
     def find_flight_sequence(group, flight)
+      # raise group.size.inspect
+puts "\n\ngroup: #{group.size.inspect} flight: #{flight.inspect}\n\n"
       from = flight.to
 
-      if destination = group.detect{ |f| f.from == from && f.to == 'Z' }
-        return [group.delete(destination)]
-      end
-
+#       if destination = group.detect{ |f| f.from == from && f.to == 'Z' }
+# puts "\tfound a match: #{destination.inspect}"
+#         return [group.delete(destination)]
+#       end
+# raise group.find_all{ |f| f.from == from }.inspect
       group.find_all{ |f| f.from == from }.each do |leg|
-        group.delete_if{ |r| r == leg || ( r.to == leg.from && r.from == leg.to ) } # no back-tracking
 
+        if leg.from == from && leg.to == 'Z'
+          # destination = leg
+puts "\tfound a destination leg: #{leg.inspect}"
+          # return [group.delete(destination)]
+          return group.delete(leg)
+        end
+        
+        
+        group.delete_if{ |r| r == leg || ( r.to == leg.from && r.from == leg.to ) } # no back-tracking
+        
         if other_legs = find_flight_sequence(group, leg)
-          return [other_legs, leg]
+          # return [other_legs, leg]
+          return [leg, other_legs]
         end
       end
     end
@@ -90,17 +110,20 @@ module CheapTouristFastTourist
       # (see #cheapest_flight and #fastest_flight, above)
       direct.collect!{ |f| [f] }
 
+# raise indirect.find_all{|f| f.from == 'A'}.inspect
+
       @flight_sequences[group.object_id] = direct + indirect.find_all{|f| f.from == 'A'}.collect do |flight|
         [flight] + find_flight_sequence(indirect.dup, flight)
       end
-    rescue Exception => e
-      raise <<-EOS
-      
-      group: #{group.inspect}
-      
-      #{e}
-      
-      EOS
+raise @flight_sequences[group.object_id].inspect
+    # rescue Exception => e
+    #   raise <<-EOS
+    #   
+    #   group: #{group.inspect}
+    #   
+    #   #{e}
+    #   
+    #   EOS
     end
 
     # workaround until https://github.com/injekt/slop/pull/15 is accepted and released
@@ -131,8 +154,6 @@ module CheapTouristFastTourist
       @flight_groups.each_with_index do |group, idx|
         puts "" unless idx == 0 # print blank line between each group's output
         print_flight(cheapest_flight(flight_sequences(group)))
-# raise cheapest_flight(flight_sequences(group)).inspect
-# raise fastest_flight(flight_sequences(group)).inspect
         print_flight(fastest_flight(flight_sequences(group)))
       end
     end
@@ -167,9 +188,13 @@ module CheapTouristFastTourist
     end
     
     # accepts an (single- or multi-element) array which comprises a "flight" 
-    # from 'A' to 'Z' and returns its total flight time
-    def total_time_of_flight(legs)
-      legs.inject(0.0){|total, leg| total += leg.flight_time}
+    # from 'A' to 'Z' and returns its total elapsed time from departure to arrival
+    def total_elasped_time_for_flight(legs)
+      departure = legs.detect{ |leg| leg.from == 'A' }.departure
+      arrival   = legs.detect{ |leg| leg.to   == 'Z' }.arrival
+      
+      # in minutes
+      ( (Time.parse(departure) - Time.parse(arrival)) / 60.0 ).abs
     end
 
     def verify_flight_data
