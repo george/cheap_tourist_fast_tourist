@@ -11,7 +11,7 @@
 #   george@benevolentcode.com
 
 require 'bigdecimal'
-require 'ostruct'
+# require 'flight'
 require 'slop'
 require 'time'
 
@@ -34,8 +34,31 @@ module CheapTouristFastTourist
     #######
 
     def cheapest_flight(group)
-      cost = 0.0
-      raise flight_sequences(group).min { |seq_a, seq_b| seq_a.inject(0.0){|acc, f| acc += f.price} <=> seq_b.inject(0.0){|acc, f| acc += f.price} }.inspect
+      lowest_priced_flight = flight_sequences(group).min { |a, b| total_price_of_flight(a) <=> total_price_of_flight(b) }
+      lowest_price = total_price_of_flight(lowest_priced_flight)
+raise group.inspect
+      flights_at_lowest_price = group.find_all{ |legs| total_price_of_flight(legs) == lowest_price }
+raise flights_at_lowest_price.inspect
+      if flights_at_lowest_price.size == 1
+        puts flights_at_lowest_price.first + "\n\n"
+      else
+        # puts fastest_flight(flights_at_lowest_price)
+      end
+    end
+    
+    # accepts an (single- or multi-element) array which comprises a "flight" 
+    # from 'A' to 'Z' and returns its total price
+    def total_price_of_flight(legs)
+      legs.inject(0.0){|total, leg| total += leg.price}
+rescue Exception => e
+  raise <<-EOS
+  
+  legs: #{legs.inspect}
+  
+  
+  #{e}
+  
+  EOS
     end
 
     def display_usage_and_exit(error_message = nil)
@@ -63,7 +86,7 @@ module CheapTouristFastTourist
         group.delete_if{ |r| r == leg || ( r.to == leg.from && r.from == leg.to ) } # no back-tracking
 
         if other_legs = find_flight_sequence(group, leg)
-          return [other_legs, leg].flatten
+          return [other_legs, leg]
         end
       end
     end
@@ -80,13 +103,8 @@ module CheapTouristFastTourist
       @flight_sequences[group.object_id] = direct + indirect.find_all{|f| f.from == 'A'}.collect do |flight|
         [flight] + find_flight_sequence(indirect.dup, flight)
       end
-    end
-
-    # calculates flight time in seconds
-    def flight_time(t1, t2)
-      t1 = Time.parse(t1)
-      t2 = Time.parse(t2)
-      (t1 - t2).abs
+      
+      raise @flight_sequences[group.object_id].inspect
     end
 
     # workaround until https://github.com/injekt/slop/pull/15 is accepted and released
@@ -109,7 +127,9 @@ module CheapTouristFastTourist
     end
 
     def process_flight_groups
+# raise @flight_groups.inspect
       @flight_groups.each_with_index do |group, idx|
+# raise group.inspect
         puts "" unless idx == 0 # print blank line between each group's output
         puts cheapest_flight(group)
         puts fastest_flight(group)
@@ -134,8 +154,7 @@ module CheapTouristFastTourist
 
       @flight_groups = _flight_groups.collect do |group|
         group.collect do |flight_idx|
-          f = raw_flight_data.at(flight_idx).split
-          OpenStruct.new(:index => flight_idx, :from => f[0], :to => f[1], :price => BigDecimal(f[4], 15), :flight_time => flight_time(f[2], f[3]))
+          Flight.new(raw_flight_data.at(flight_idx))
         end
       end
     end
