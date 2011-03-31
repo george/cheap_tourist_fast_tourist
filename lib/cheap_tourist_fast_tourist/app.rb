@@ -34,12 +34,12 @@ module CheapTouristFastTourist
     #######
 
     def cheapest_flight(group)
-raise group.inspect
+# raise group.inspect
       lowest_priced_flight = group.min { |a, b| total_price_of_flight(a) <=> total_price_of_flight(b) }
-raise lowest_priced_flight.inspect
+# raise lowest_priced_flight.inspect
       lowest_price = total_price_of_flight(lowest_priced_flight)
       flights_at_lowest_price = group.find_all{ |legs| total_price_of_flight(legs) == lowest_price }
-raise flights_at_lowest_price.inspect
+# raise flights_at_lowest_price.inspect
       if flights_at_lowest_price.size == 1
         flights_at_lowest_price.first
       else
@@ -55,17 +55,27 @@ raise flights_at_lowest_price.inspect
     end
 
     def fastest_flight(group)
+      puts "\n\n\n"
+      group.each do |legs|
+        puts total_elasped_time_for_flight(legs).divmod(60).join(':')
+        puts legs.map(&:inspect).join("\n")
+        puts '########################'
+      end
+      puts "\n\n\n"
+      
+      
       shortest_flight = group.min { |a, b| total_elasped_time_for_flight(a) <=> total_elasped_time_for_flight(b) }
       shortest_flight_time = total_elasped_time_for_flight(shortest_flight)
 # raise (shortest_flight_time).inspect
       flights_at_shortest_time = group.find_all{ |legs| total_elasped_time_for_flight(legs) == shortest_flight_time }
 # raise flights_at_shortest_time.inspect
-      # if flights_at_shortest_time.size == 1
-      #         flights_at_shortest_time.first
-      #       else
-      #         cheapest_flight(flights_at_shortest_time)
-      #       end
-      flights_at_shortest_time.min { |a, b| total_price_of_flight(a) <=> total_price_of_flight(b) }
+raise shortest_flight_time.divmod(60).join(':').inspect
+      if flights_at_shortest_time.size == 1
+              flights_at_shortest_time.first
+            else
+              cheapest_flight(flights_at_shortest_time)
+            end
+      # flights_at_shortest_time.min { |a, b| total_price_of_flight(a) <=> total_price_of_flight(b) }
     end
 
     def file_exists?(filepath)
@@ -74,7 +84,7 @@ raise flights_at_lowest_price.inspect
 
     def find_flight_sequence(group, flight)
       # raise group.size.inspect
-puts "\n\ngroup: #{group.size.inspect} flight: #{flight.inspect}\n\n"
+puts "~~~~~~~~~~~~~~~~~~~~~\n\ngroup: #{group.size.inspect} flight: #{flight.inspect}"
       from = flight.to
 
 #       if destination = group.detect{ |f| f.from == from && f.to == 'Z' }
@@ -100,6 +110,14 @@ puts "\tfound a destination leg: #{leg.inspect}"
         end
       end
     end
+    
+    def find_flight_sequences(group, flight)
+      from = flight.to
+      
+      flight_group = group.dup
+      
+      
+    end
 
     def flight_sequences(group)
       return @flight_sequences[group.object_id] if @flight_sequences.has_key?(group.object_id)
@@ -113,9 +131,9 @@ puts "\tfound a destination leg: #{leg.inspect}"
 # raise indirect.find_all{|f| f.from == 'A'}.inspect
 
       @flight_sequences[group.object_id] = direct + indirect.find_all{|f| f.from == 'A'}.collect do |flight|
-        [flight] + find_flight_sequence(indirect.dup, flight)
+        [flight] + find_flight_sequences(indirect.dup, flight)
       end
-raise @flight_sequences[group.object_id].inspect
+# raise @flight_sequences[group.object_id].inspect
     # rescue Exception => e
     #   raise <<-EOS
     #   
