@@ -34,33 +34,16 @@ module CheapTouristFastTourist
     #######
 
     def cheapest_flight(group)
-      lowest_priced_flight = flight_sequences(group).min { |a, b| total_price_of_flight(a) <=> total_price_of_flight(b) }
+      lowest_priced_flight = group.min { |a, b| total_price_of_flight(a) <=> total_price_of_flight(b) }
       lowest_price = total_price_of_flight(lowest_priced_flight)
-raise group.inspect
       flights_at_lowest_price = group.find_all{ |legs| total_price_of_flight(legs) == lowest_price }
-raise flights_at_lowest_price.inspect
       if flights_at_lowest_price.size == 1
-        puts flights_at_lowest_price.first + "\n\n"
+        flights_at_lowest_price.first
       else
-        # puts fastest_flight(flights_at_lowest_price)
+        fastest_flight(flights_at_lowest_price)
       end
     end
     
-    # accepts an (single- or multi-element) array which comprises a "flight" 
-    # from 'A' to 'Z' and returns its total price
-    def total_price_of_flight(legs)
-      legs.inject(0.0){|total, leg| total += leg.price}
-rescue Exception => e
-  raise <<-EOS
-  
-  legs: #{legs.inspect}
-  
-  
-  #{e}
-  
-  EOS
-    end
-
     def display_usage_and_exit(error_message = nil)
       puts "\n#{error_message}\n\n" if error_message
       puts @options
@@ -68,7 +51,14 @@ rescue Exception => e
     end
 
     def fastest_flight(group)
-      flight_sequences(group)
+      shortest_flight = group.min { |a, b| total_time_of_flight(a) <=> total_time_of_flight(b) }
+      shortest_flight_time = total_time_of_flight(shortest_flight)
+      flights_at_shortest_time = group.find_all{ |legs| total_time_of_flight(legs) == shortest_flight_time }
+      if flights_at_shortest_time.size == 1
+        flights_at_shortest_time.first
+      else
+        cheapest_flight(flights_at_shortest_time)
+      end
     end
 
     def file_exists?(filepath)
@@ -103,8 +93,14 @@ rescue Exception => e
       @flight_sequences[group.object_id] = direct + indirect.find_all{|f| f.from == 'A'}.collect do |flight|
         [flight] + find_flight_sequence(indirect.dup, flight)
       end
+    rescue Exception => e
+      raise <<-EOS
       
-      raise @flight_sequences[group.object_id].inspect
+      group: #{group.inspect}
+      
+      #{e}
+      
+      EOS
     end
 
     # workaround until https://github.com/injekt/slop/pull/15 is accepted and released
@@ -120,6 +116,11 @@ rescue Exception => e
       _parse_options(false)
       display_usage_and_exit(e.message)
     end
+    
+    def print_flight(legs)
+      legs = legs.sort_by{ |leg| leg.from }
+      puts "#{legs.first.departure} #{legs.last.arrival} #{total_price_of_flight(legs).to_s.sub(/\.0$/, '.00')}"
+    end
 
     def process_flight_data
       segregate_flight_groups
@@ -127,12 +128,12 @@ rescue Exception => e
     end
 
     def process_flight_groups
-# raise @flight_groups.inspect
       @flight_groups.each_with_index do |group, idx|
-# raise group.inspect
         puts "" unless idx == 0 # print blank line between each group's output
-        puts cheapest_flight(group)
-        puts fastest_flight(group)
+        print_flight(cheapest_flight(flight_sequences(group)))
+# raise cheapest_flight(flight_sequences(group)).inspect
+# raise fastest_flight(flight_sequences(group)).inspect
+        print_flight(fastest_flight(flight_sequences(group)))
       end
     end
 
@@ -157,6 +158,18 @@ rescue Exception => e
           Flight.new(raw_flight_data.at(flight_idx))
         end
       end
+    end
+    
+    # accepts an (single- or multi-element) array which comprises a "flight" 
+    # from 'A' to 'Z' and returns its total price
+    def total_price_of_flight(legs)
+      legs.inject(0.0){|total, leg| total += leg.price}
+    end
+    
+    # accepts an (single- or multi-element) array which comprises a "flight" 
+    # from 'A' to 'Z' and returns its total flight time
+    def total_time_of_flight(legs)
+      legs.inject(0.0){|total, leg| total += leg.flight_time}
     end
 
     def verify_flight_data
