@@ -1,4 +1,5 @@
 .rvmrc
 tmp
 .DS_Store
+.bundle/config
 
