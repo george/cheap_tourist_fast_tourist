@@ -15,6 +15,14 @@ class Flight
     self.price       = BigDecimal(flight[4], 15)
     self.flight_time = calculate_flight_time
   end
+  
+  def arrival_time
+    Time.parse(departure)
+  end
+  
+  def departure_time
+    Time.parse(arrival)
+  end
 
   def to_s
     "#{from} #{to} #{departure} #{arrival} #{price.to_s('F').sub(/\.0$/, '.00')}"

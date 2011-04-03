@@ -48,6 +48,45 @@ module CheapTouristFastTourist
       # flights_at_lowest_price.min { |a, b| total_elasped_time_for_flight(a) <=> total_elasped_time_for_flight(b) }
     end
     
+    def determine_flight_sequences(flights)
+      originating_flights = flights.find_all{|f| f.from == 'A' }
+
+      originating_flights.collect do |originating_flight|
+        if originating_flight.to == 'Z'
+          [originating_flight]
+        else
+          determine_individual_flight_sequences((flights.dup - originating_flights), originating_flight).collect do |tail_sequence|
+            tail_sequence.unshift(originating_flight)
+          end
+        end
+      end
+    end
+    
+    def determine_individual_flight_sequences(flights, departing_flight = nil)
+      departing = departing_flight ? departing_flight.to : 'A'
+
+      originating_flights = flights.find_all do |f| 
+        f.from == departing && 
+        (f.to != (departing_flight && departing)) # &&
+        # (departing_flight.nil? || departing_flight.arrival_time >= f.departure_time)
+      end
+
+      # iterate through originating_flights, collecting their full routes
+      originating_flights.collect do |originating_flight|
+        if originating_flight.to == 'Z'
+          [originating_flight]
+        else
+          domain_of_flights = flights.dup.delete_if{ |f| f == originating_flight || (f.to == originating_flight.from && f.from == originating_flight.to) }
+
+          if domain_of_flights.size == 1
+            return [originating_flight, domain_of_flights.first]
+          else
+             determine_individual_flight_sequences(domain_of_flights, originating_flight).unshift(originating_flight).flatten
+          end
+        end
+      end
+    end
+    
     def display_usage_and_exit(error_message = nil)
       puts "\n#{error_message}\n\n" if error_message
       puts @options
@@ -55,7 +94,8 @@ module CheapTouristFastTourist
     end
 
     def fastest_flight(group)
-      puts "\n\n\n"
+      raise group.inspect
+      puts "\n\n\nFASTEST FLIGHT\n"
       group.each do |legs|
         puts total_elasped_time_for_flight(legs).divmod(60).join(':')
         puts legs.map(&:inspect).join("\n")
@@ -69,7 +109,7 @@ module CheapTouristFastTourist
 # raise (shortest_flight_time).inspect
       flights_at_shortest_time = group.find_all{ |legs| total_elasped_time_for_flight(legs) == shortest_flight_time }
 # raise flights_at_shortest_time.inspect
-raise shortest_flight_time.divmod(60).join(':').inspect
+# raise shortest_flight_time.divmod(60).join(':').inspect
       if flights_at_shortest_time.size == 1
               flights_at_shortest_time.first
             else
@@ -82,43 +122,6 @@ raise shortest_flight_time.divmod(60).join(':').inspect
       filepath && File.exists?(filepath)
     end
 
-    def find_flight_sequence(group, flight)
-      # raise group.size.inspect
-puts "~~~~~~~~~~~~~~~~~~~~~\n\ngroup: #{group.size.inspect} flight: #{flight.inspect}"
-      from = flight.to
-
-#       if destination = group.detect{ |f| f.from == from && f.to == 'Z' }
-# puts "\tfound a match: #{destination.inspect}"
-#         return [group.delete(destination)]
-#       end
-# raise group.find_all{ |f| f.from == from }.inspect
-      group.find_all{ |f| f.from == from }.each do |leg|
-
-        if leg.from == from && leg.to == 'Z'
-          # destination = leg
-puts "\tfound a destination leg: #{leg.inspect}"
-          # return [group.delete(destination)]
-          return group.delete(leg)
-        end
-        
-        
-        group.delete_if{ |r| r == leg || ( r.to == leg.from && r.from == leg.to ) } # no back-tracking
-        
-        if other_legs = find_flight_sequence(group, leg)
-          # return [other_legs, leg]
-          return [leg, other_legs]
-        end
-      end
-    end
-    
-    def find_flight_sequences(group, flight)
-      from = flight.to
-      
-      flight_group = group.dup
-      
-      
-    end
-
     def flight_sequences(group)
       return @flight_sequences[group.object_id] if @flight_sequences.has_key?(group.object_id)
 
@@ -128,22 +131,10 @@ puts "\tfound a destination leg: #{leg.inspect}"
       # (see #cheapest_flight and #fastest_flight, above)
       direct.collect!{ |f| [f] }
 
-# raise indirect.find_all{|f| f.from == 'A'}.inspect
-
-      @flight_sequences[group.object_id] = direct + indirect.find_all{|f| f.from == 'A'}.collect do |flight|
-        [flight] + find_flight_sequences(indirect.dup, flight)
-      end
-# raise @flight_sequences[group.object_id].inspect
-    # rescue Exception => e
-    #   raise <<-EOS
-    #   
-    #   group: #{group.inspect}
-    #   
-    #   #{e}
-    #   
-    #   EOS
+      @flight_sequences[group.object_id] = direct + determine_flight_sequences(indirect).inject([]){ |acc, ary| acc + ary}
+      # raise @flight_sequences[group.object_id].inspect
     end
-
+    
     # workaround until https://github.com/injekt/slop/pull/15 is accepted and released
     def _parse_options(strict = true)
       @options = Slop.parse!(@arguments, :help => true, :strict => strict) do
@@ -167,12 +158,22 @@ puts "\tfound a destination leg: #{leg.inspect}"
       segregate_flight_groups
       process_flight_groups
     end
+    
+    def remove_invalid_flights(flight_sequences)
+      return flight_sequences
+      raise flight_sequences.inspect
+      flight_sequences.find_all do |flight_sequence|
+        
+      end
+    end
 
     def process_flight_groups
       @flight_groups.each_with_index do |group, idx|
+        group = remove_invalid_flights(group)
+        
         puts "" unless idx == 0 # print blank line between each group's output
-        print_flight(cheapest_flight(flight_sequences(group)))
-        print_flight(fastest_flight(flight_sequences(group)))
+        print_flight( cheapest_flight( remove_invalid_flights( flight_sequences( group ) ) ) )
+        print_flight( fastest_flight(  remove_invalid_flights( flight_sequences( group ) ) ) )
       end
     end
 
@@ -185,6 +186,10 @@ puts "\tfound a destination leg: #{leg.inspect}"
 
       raw_flight_data.each_with_index do |line, idx|
         next if idx == 0 # ignore the number of test cases
+        
+        # for ease of debugging
+          next if line == "\n"
+          next if line =~ /^# /
 
         if /^\d+$/ =~ line.chomp!
           flights = Integer(line)
@@ -213,6 +218,19 @@ puts "\tfound a destination leg: #{leg.inspect}"
       
       # in minutes
       ( (Time.parse(departure) - Time.parse(arrival)) / 60.0 ).abs
+    rescue Exception => e
+      raise <<-EOS
+      
+      ERROR in total_elasped_time_for_flight
+      
+      legs:
+      #{legs.inspect}
+      
+      ----------------------------------------------
+      
+      #{e}
+      
+      EOS
     end
 
     def verify_flight_data
