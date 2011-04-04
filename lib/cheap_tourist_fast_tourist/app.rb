@@ -35,6 +35,8 @@ module CheapTouristFastTourist
 
     def cheapest_flight(group)
 # raise group.inspect
+      group = remove_invalid_flights(group.dup)
+      # raise group.inspect
       lowest_priced_flight = group.min { |a, b| total_price_of_flight(a) <=> total_price_of_flight(b) }
 # raise lowest_priced_flight.inspect
       lowest_price = total_price_of_flight(lowest_priced_flight)
@@ -47,7 +49,7 @@ module CheapTouristFastTourist
       end
       # flights_at_lowest_price.min { |a, b| total_elasped_time_for_flight(a) <=> total_elasped_time_for_flight(b) }
     end
-    
+
     def determine_flight_sequences(flights)
       originating_flights = flights.find_all{|f| f.from == 'A' }
 
@@ -61,12 +63,12 @@ module CheapTouristFastTourist
         end
       end
     end
-    
+
     def determine_individual_flight_sequences(flights, departing_flight = nil)
       departing = departing_flight ? departing_flight.to : 'A'
 
-      originating_flights = flights.find_all do |f| 
-        f.from == departing && 
+      originating_flights = flights.find_all do |f|
+        f.from == departing &&
         (f.to != (departing_flight && departing)) # &&
         # (departing_flight.nil? || departing_flight.arrival_time >= f.departure_time)
       end
@@ -86,7 +88,7 @@ module CheapTouristFastTourist
         end
       end
     end
-    
+
     def display_usage_and_exit(error_message = nil)
       puts "\n#{error_message}\n\n" if error_message
       puts @options
@@ -94,16 +96,16 @@ module CheapTouristFastTourist
     end
 
     def fastest_flight(group)
-      raise group.inspect
-      puts "\n\n\nFASTEST FLIGHT\n"
-      group.each do |legs|
-        puts total_elasped_time_for_flight(legs).divmod(60).join(':')
-        puts legs.map(&:inspect).join("\n")
-        puts '########################'
-      end
-      puts "\n\n\n"
-      
-      
+      group = remove_invalid_flights(group.dup)
+      # puts "\n\n\nFASTEST FLIGHT\n"
+      # group.each do |legs|
+      #   puts total_elasped_time_for_flight(legs).divmod(60).join(':')
+      #   puts legs.map(&:inspect).join("\n")
+      #   puts '########################'
+      # end
+      # puts "\n\n\n"
+
+
       shortest_flight = group.min { |a, b| total_elasped_time_for_flight(a) <=> total_elasped_time_for_flight(b) }
       shortest_flight_time = total_elasped_time_for_flight(shortest_flight)
 # raise (shortest_flight_time).inspect
@@ -134,7 +136,7 @@ module CheapTouristFastTourist
       @flight_sequences[group.object_id] = direct + determine_flight_sequences(indirect).inject([]){ |acc, ary| acc + ary}
       # raise @flight_sequences[group.object_id].inspect
     end
-    
+
     # workaround until https://github.com/injekt/slop/pull/15 is accepted and released
     def _parse_options(strict = true)
       @options = Slop.parse!(@arguments, :help => true, :strict => strict) do
@@ -148,7 +150,7 @@ module CheapTouristFastTourist
       _parse_options(false)
       display_usage_and_exit(e.message)
     end
-    
+
     def print_flight(legs)
       legs = legs.sort_by{ |leg| leg.from }
       puts "#{legs.first.departure} #{legs.last.arrival} #{total_price_of_flight(legs).to_s.sub(/\.0$/, '.00')}"
@@ -158,22 +160,65 @@ module CheapTouristFastTourist
       segregate_flight_groups
       process_flight_groups
     end
-    
+
+    # remove flights which have a leg that arrives after its connecting flight departs
     def remove_invalid_flights(flight_sequences)
-      return flight_sequences
-      raise flight_sequences.inspect
-      flight_sequences.find_all do |flight_sequence|
-        
+      valid = flight_sequences.find_all do |flight_sequence|
+        flight_sequence.all? do |leg|
+          if leg.from == 'A' && leg.to == 'Z'
+            true
+          elsif leg.to == 'Z'
+            true
+          else
+            connections = flight_sequence.find_all{|f| leg.to == f.from}
+            if connections.size > 1
+              raise <<-EOS
+
+              leg: #{leg.inspect}
+
+              connections: #{connections.inspect}
+
+              EOS
+
+            elsif false && leg.departure=="15:45" && leg.flight_time==60.0 && leg.from=="C"  && leg.price==50.00 && leg.to=="B" && leg.arrival=="16:45"
+              raise <<-EOS
+
+              leg: #{leg.inspect}
+
+              connection: #{connections.first.inspect}
+
+              leg.arrival_time: #{leg.arrival_time.inspect}
+
+              connection.departure_time: #{connections.first.departure_time.inspect}
+
+              (leg.arrival_time <= connection.departure_time): #{(leg.arrival_time <= connections.first.departure_time).inspect}
+              (leg.arrival <= connection.departure): #{(leg.arrival <= connections.first.departure).inspect}
+              EOS
+            else
+              connection = connections.first
+            end
+# puts "\n\n#{leg.arrival_time} > #{connection.departure_time} ??? #{(leg.arrival_time > connection.departure_time).inspect} :: #{(leg.arrival_time <=> connection.departure_time).inspect}\n\n"
+            # connection && (leg.arrival_time <= connection.departure_time)
+            connection && (leg.arrival <= connection.departure)
+          end
+        end
       end
+      valid
+#       raise <<-EOS
+#
+# #{valid.inspect}
+#
+#
+# #{flight_sequences.inspect}
+#
+#       EOS
     end
 
     def process_flight_groups
       @flight_groups.each_with_index do |group, idx|
-        group = remove_invalid_flights(group)
-        
         puts "" unless idx == 0 # print blank line between each group's output
-        print_flight( cheapest_flight( remove_invalid_flights( flight_sequences( group ) ) ) )
-        print_flight( fastest_flight(  remove_invalid_flights( flight_sequences( group ) ) ) )
+        print_flight( cheapest_flight( flight_sequences( group ) ) )
+        print_flight( fastest_flight(  flight_sequences( group ) ) )
       end
     end
 
@@ -186,7 +231,7 @@ module CheapTouristFastTourist
 
       raw_flight_data.each_with_index do |line, idx|
         next if idx == 0 # ignore the number of test cases
-        
+
         # for ease of debugging
           next if line == "\n"
           next if line =~ /^# /
@@ -203,33 +248,33 @@ module CheapTouristFastTourist
         end
       end
     end
-    
-    # accepts an (single- or multi-element) array which comprises a "flight" 
+
+    # accepts an (single- or multi-element) array which comprises a "flight"
     # from 'A' to 'Z' and returns its total price
     def total_price_of_flight(legs)
       legs.inject(0.0){|total, leg| total += leg.price}
     end
-    
-    # accepts an (single- or multi-element) array which comprises a "flight" 
+
+    # accepts an (single- or multi-element) array which comprises a "flight"
     # from 'A' to 'Z' and returns its total elapsed time from departure to arrival
     def total_elasped_time_for_flight(legs)
       departure = legs.detect{ |leg| leg.from == 'A' }.departure
       arrival   = legs.detect{ |leg| leg.to   == 'Z' }.arrival
-      
+
       # in minutes
       ( (Time.parse(departure) - Time.parse(arrival)) / 60.0 ).abs
     rescue Exception => e
       raise <<-EOS
-      
+
       ERROR in total_elasped_time_for_flight
-      
+
       legs:
       #{legs.inspect}
-      
+
       ----------------------------------------------
-      
+
       #{e}
-      
+
       EOS
     end
 
